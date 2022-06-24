@@ -22,28 +22,30 @@ def convert_to_csv(response, filename):
 
 
 def print_population2021():
-    url1 = "https://api.census.gov/data/2021/pep/population?get=NAME,POP_2021&for=county:*&in=state:12&key={0}".format(census_api_key)
-    url = """https://api.census.gov/data/2019/pep/population?get=NAME,POP&for=county%20subdivision:*&in=state:12%20county:011&key={0}""".format(census_api_key)
-    url = """https://api.census.gov/data/2019/pep/population?get=NAME,POP&for=county%20subdivision:*&in=state:09%20county:2&key={0}""".format(census_api_key)
+    url = "https://api.census.gov/data/2021/pep/population?get=NAME,POP_2021,POP_2020,DESC_POP_2021&for=state:*&key={0}".format(census_api_key)
     print(url)
     response = requests.request("GET",url)
-    filename_to_save = os.path.join(personal_repository,"us-census","csv_save","population_estimate_broward_.csv")
+    filename_to_save = os.path.join(personal_repository,"us-census","csv_save","population_estimate_all_state.csv")
     convert_to_csv(response, filename_to_save)
 
 def print_population2019():
-    state = ""
-    county =""
+    for_geography = 'division'
+    higher_geography = 'REGION'
+    url = """https://api.census.gov/data/2019/pep/population?get=NAME,POP,{0}&for={1}:*&key={2}""".format(higher_geography,for_geography,  census_api_key)
+    #url = """https://api.census.gov/data/2019/pep/population?get=NAME,POP&for={0}:*&key={1}""".format(for_geography, higher_geography, census_api_key)
+    print(url)
+    response = requests.request("GET",url)
+    filename_to_save = os.path.join(personal_repository,"us-census","csv_save","population_2019_{0}.csv".format(for_geography))
+    convert_to_csv(response, filename_to_save)
 
-
-def main():
-    print_population2021()
 
 def main2():
-    geographies = ['us','region','division','state']
-    geographies = ['division','state']
-    for geography in geographies:
-        print_population2021()
+    print_population2021()
 
+def main():
+    #geographies = ['us','region','division','state']
+    #print_population2021()
+    print_population2019()
 if __name__=='__main__':
     main()
 
