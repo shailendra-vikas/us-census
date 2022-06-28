@@ -1,2 +1,4 @@
 *.csv
 csv_save
+.vscode/launch.json
+*.pyc
