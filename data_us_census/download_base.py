@@ -5,30 +5,21 @@ import utility as util
 
 
 
-class KeyChain(object):
-    def __init__(self):
-        self.personal_repository = "/home/shailendra_vikas/personal_repository"
-        try:
-            self.key_df = pd.read_csv(os.path.join(self.personal_repository,"api_key.csv"))
-        except FileNotFoundError:
-            self.personal_repository = "C:\\Users\\Shailendra\\Documents\\GitHub"
-        self.key_df = pd.read_csv(os.path.join(self.personal_repository,"api_key.csv"))
-
-    
-    def get_key(self, source):
-        key_row  = self.key_df.loc[self.key_df['source'] == source]
-        return key_row['key_value'].iloc[0]
-
-
 class DownloadBase(object):
     def __init__(self, params):
         self.params = params
-        self.key_chain = KeyChain()
-        #self.collected_geography =  dict()
         self.master_data = None
         self.url = self._make_url()
-        
+
+        self.tag_tables_table, self.geo_labels_table, self.geo_data_table = self._load_tables()
+    
+    def _load_tables(self):
+        #In future this should be lot more complicated
+        return dict(), dict(), dict()
+
+
     def _make_url(self):
+        """ Format the base part of the Url"""
         survey_str = "/".join(self.params.surveys)
         column_str = "NAME," + ",".join(self.params.data_columns)
         url = "https://api.census.gov/data/{0}/{1}?get={2}".format(self.params.data_year, survey_str, column_str)
@@ -36,7 +27,8 @@ class DownloadBase(object):
         return url
 
     def _collect_data(self, url_argument, geo_label):
-        url_argument['key'] = self.key_chain.get_key('census')
+        """ Fetch data from census-url website at the geo_label level with arguments for url provided in url_argument"""
+        url_argument['key'] = self.params.key_chain.get_key('census')
         if self.params.sleep is not None:
             import time
             time.sleep(self.params.sleep)
@@ -56,7 +48,8 @@ class DownloadBase(object):
         
         return data_df.rename(columns=rename_dict)
 
-    def fetch_and_fill(self):
+    def fetch(self):
+        """ Fetch the data for all level for the paramters provided in params file."""
         for geo_level, geo_label in enumerate(self.params.geography_order):
             url_argument = dict()
             #url_argument['for'] = "{0}:*".format(geo_label)
@@ -81,18 +74,37 @@ class DownloadBase(object):
                     self.master_data = self.master_data.merge(all_current_level_df, on=join_columns, how="left")
         
         #Now accumulated data. Make tables to insert data
-        all_tags = self.params.surveys + self.params.geography_order
-        all_tags = [tag.replace(" ","_") for tag in all_tags]
-        csv_filename = "_".join(all_tags) +".csv"
+        csv_filename = self.params.csv_filename()
         self.master_data.to_csv(csv_filename, index=False)
         print("Making csv file {0}".format(csv_filename))
-                
+    
+    def _load_master_data(self):
+        csv_filename = self.params.csv_filename()
+        self.master_data = pd.read_csv(csv_filename)
+
+    def fill(self):
+        if self.master_data is None:
+            self._load_master_data()
+            if self.master_data is None:
+                return None
+        
+
+        #The table structure would be like
+        # Geo_lavels: geo_group_id(generated, One id for one geo heirarchy), level, name, GEO_ID
+        # Table geo_location : location_id(generatedId), Name, census_id, geo_id
+
+        
+
+        
+        
+        
+
 
 def test_download():
     import params_base
     params = params_base.Params()
     download_base = DownloadBase(params)
-    download_base.fetch_and_fill()
+    #download_base.fetch_and_fill()
 
 
 if __name__=='__main__':
