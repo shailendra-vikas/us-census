@@ -38,7 +38,7 @@ class DownloadBase(object):
 
         rename_dict = {}
         for col in data_df.columns:
-            col_wo_space = col.replace(" ","_")
+            col_wo_space = col.replace(" ","_") #don't use spaces in the name, use underscore instead
             if col==geo_label or ("in" in url_argument and col in url_argument['in'].keys()):
                 rename_dict[col] = "{0}_id".format(col_wo_space)
             else:
@@ -92,6 +92,18 @@ class DownloadBase(object):
         #The table structure would be like
         # Geo_lavels: geo_group_id(generated, One id for one geo heirarchy), level, name, GEO_ID
         # Table geo_location : location_id(generatedId), Name, census_id, geo_id
+
+        id_related_columns = ['id','NAME']
+        if 'GEO_ID' in self.params.data_columns:
+            id_related_columns.append('GEO_ID')
+        data_related_columns = list(set(self.params.data_columns) - set(id_related_columns))
+
+        geo_group_id =  dict()
+        geo_group_data = dict()
+        for index, row in self.master_data.iterrows():
+            for geo_level, geo_label in enumerate(self.params.geography_order):
+
+
 
         
 

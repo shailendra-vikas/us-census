@@ -1,9 +1,9 @@
-from urllib.parse import non_hierarchical
 import pandas as pd
 
 
 
 def url_to_df(url, arguments):
+    import requests
     argument_str = [url,]
     for argkey, argvalue in arguments.items():
         if isinstance(argvalue, dict):
@@ -13,7 +13,6 @@ def url_to_df(url, arguments):
         argument_str.append("{0}={1}".format(argkey,value_str))
     
     full_url = "&".join(argument_str)
-    import requests
     response = requests.request("GET",full_url)
     if response.status_code == 204:
         return None
