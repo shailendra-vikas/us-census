@@ -4,6 +4,42 @@ import pandas as pd
 import utility as util
 
 
+class DataCollection(object):
+    def __init__(self, params):
+        self.params = params
+
+        self.id_related_columns = ['id','NAME']
+        if 'GEO_ID' in self.params.data_columns:
+            self.id_related_columns.append('GEO_ID')
+        self.data_related_columns = list(set(self.params.data_columns) - set(self.id_related_columns))
+
+        self.next_geo_id = 0
+        self.geo_group_id =  dict()
+        self.geo_group_data = dict()
+    
+    def add_geo_id(self, key_tuple, parent_id):
+        self.geo_group_id[key_tuple] = (self.next_geo_id, parent_id)
+        pass
+
+    def add(self, row):
+        for geo_level, geo_label in enumerate(self.params.geography_order):
+            id_primary = row[["{0}_{1}".format(geo_label,_col) for _col in self.id_related_columns]].totuple()
+            geo_id_and_parent_id = self.geo_group_id.get(id_primary)
+            if geo_id_and_parent_id is not None:
+                geo_id = geo_id_and_parent_id[0]
+            else:
+                parent_level = geo_level -1
+                if parent_level<0:
+                    parent_id = None
+                else:
+                    parent_primary = row[["{0}_{1}".format(self.params.geography_order[parent_level],_col) for _col in self.id_related_columns]].totuple()
+                    junk, parent_id = self.geo_group_id[parent_primary]
+                geo_id = self.add_geo_id(id_primary, parent_id)    
+                
+
+        #The table structure would be like
+        # Geo_lavels: geo_group_id(generated, One id for one geo heirarchy), level, name, GEO_ID
+        # Table geo_location : location_id(generatedId), Name, census_id, geo_id
 
 class DownloadBase(object):
     def __init__(self, params):
@@ -88,21 +124,10 @@ class DownloadBase(object):
             if self.master_data is None:
                 return None
         
-
-        #The table structure would be like
-        # Geo_lavels: geo_group_id(generated, One id for one geo heirarchy), level, name, GEO_ID
-        # Table geo_location : location_id(generatedId), Name, census_id, geo_id
-
-        id_related_columns = ['id','NAME']
-        if 'GEO_ID' in self.params.data_columns:
-            id_related_columns.append('GEO_ID')
-        data_related_columns = list(set(self.params.data_columns) - set(id_related_columns))
-
-        geo_group_id =  dict()
-        geo_group_data = dict()
+        data_collection = DataCollection(self.params)
         for index, row in self.master_data.iterrows():
-            for geo_level, geo_label in enumerate(self.params.geography_order):
-
+            data_collection.add(row)
+            
 
 
         
@@ -116,7 +141,7 @@ def test_download():
     import params_base
     params = params_base.Params()
     download_base = DownloadBase(params)
-    #download_base.fetch_and_fill()
+    download_base.fill()
 
 
 if __name__=='__main__':
