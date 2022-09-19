@@ -1,10 +1,16 @@
 import os
 import logging
+import numpy as np
 import pandas as pd
 import utility as util
 
 
 class DataCollection(object):
+     # Key-> Column : Value -> (type, nullable )
+    column_properties = { 'location_id' : (int, 'int(11)', False),              'id' : (int, 'int(11)', False),          'NAME' : (str, 'varchar(200)', False),
+                               'GEO_ID' : (str, 'varchar(20)', False) ,  'parent_id' : (int, 'int(11)', True),    'PRIMGEOFLAG' : (int, 'int(2)', False),
+                                  'POP' : (int, 'int(11)', False),         'DENSITY' : (float, 'float', True)
+        }  
     def __init__(self, params):
         self.params = params
 
@@ -13,42 +19,128 @@ class DataCollection(object):
             self.id_related_columns.append('GEO_ID')
         self.data_related_columns = list(set(self.params.data_columns) - set(self.id_related_columns))
 
-        self.next_geo_id = 0
+        self.next_location_id = 0
         self.geo_group_id =  dict()
         self.geo_group_data = dict()
-    
-    def add_geo_id(self, key_tuple, parent_id):
-        self.geo_group_id[key_tuple] = (self.next_geo_id, parent_id)
-        pass
+
+
+    def add_location_id(self, key_tuple, parent_id):
+        self.geo_group_id[key_tuple] = (self.next_location_id, parent_id)
+        current_location_id = self.next_location_id
+        self.next_location_id += 1
+        return current_location_id
+
+
+    def add_geo_group_data(self, location_id, geo_data):
+        self.geo_group_data[location_id] = geo_data
+
 
     def add(self, row):
         for geo_level, geo_label in enumerate(self.params.geography_order):
-            id_primary = row[["{0}_{1}".format(geo_label,_col) for _col in self.id_related_columns]].totuple()
-            geo_id_and_parent_id = self.geo_group_id.get(id_primary)
-            if geo_id_and_parent_id is not None:
-                geo_id = geo_id_and_parent_id[0]
+            id_primary = (*row[["{0}_{1}".format(geo_label,_col) for _col in self.id_related_columns]],)
+            if all(map(np.isnan, id_primary)):
+                continue
+
+            location_id_and_parent_id = self.geo_group_id.get(id_primary)
+            if location_id_and_parent_id is not None:
+                location_id = location_id_and_parent_id[0]
             else:
-                parent_level = geo_level -1
+                parent_level = geo_level - 1
                 if parent_level<0:
                     parent_id = None
                 else:
-                    parent_primary = row[["{0}_{1}".format(self.params.geography_order[parent_level],_col) for _col in self.id_related_columns]].totuple()
-                    junk, parent_id = self.geo_group_id[parent_primary]
-                geo_id = self.add_geo_id(id_primary, parent_id)    
-                
+                    parent_primary = (*row[["{0}_{1}".format(self.params.geography_order[parent_level],_col) for _col in self.id_related_columns]],)
+                    parent_id, junk = self.geo_group_id[parent_primary]
+                location_id = self.add_location_id(id_primary, parent_id)   
+                    
+            #Added to the geo_group_data
+            geo_data = (*row[["{0}_{1}".format(geo_label,_col) for _col in self.data_related_columns]],)
+            self.add_geo_group_data(location_id, geo_data)
 
-        #The table structure would be like
-        # Geo_lavels: geo_group_id(generated, One id for one geo heirarchy), level, name, GEO_ID
-        # Table geo_location : location_id(generatedId), Name, census_id, geo_id
+    
+    def _to_df(self):
+        id_columns = ['location_id',] + self.id_related_columns + ['parent_id',]
+        id_table = []
+        for key, values in self.geo_group_id.items():
+            row = (values[0], *key, values[1])
+            id_table.append(row)
+        id_table_df = pd.DataFrame.from_records(id_table, columns = id_columns)
+        
+        data_columns = ['location_id'] + self.data_related_columns
+        data_table = []
+        for location_id, values in self.geo_group_data.items():
+            row = (location_id, *values)
+            data_table.append(row)
+        data_table_df = pd.DataFrame.from_records(data_table, columns = data_columns)
+
+        return id_table_df, data_table_df
+
+
+    def save_as_file(self):
+        id_table_df, data_table_df = self._to_df()
+        id_table_df.to_csv('id_table.csv', index=False)
+        data_table_df.to_csv('data_table.csv', index=False)
+
+
+    def _create_table_and_fill(self, tablename, table_df):
+        table_column = []
+        for col in table_df.columns:
+            col_type, col_mysql_type, nullable = self.column_properties[col]
+            table_column.append(" `{0}` {1} {2} NULL ".format(col, col_mysql_type, "" if nullable else "NOT" ))
+
+        create_qry = " CREATE TABLE `{0}` ({1})".format(tablename, ",".join(table_column))
+        print(create_qry)
+        all_rows = []
+        for index, row in table_df.iterrows():
+            row_values = []
+            for col in table_df.columns:
+                col_type, col_mysql_type, nullable = self.column_properties[col]
+                if col_type == str:
+                    row_values.append("'{}'".format(col_type(row[col])))
+                elif np.isnan(row[col]):
+                    row_values.append("NULL")
+                else:
+                    row_values.append("{}".format(col_type(row[col])))
+            all_rows.append(",".join(row_values))
+
+            if index%100 == 1:
+                insert_qry =  """ INSERT INTO {0} VALUES ({1})""".format(tablename, "),(".join(all_rows))
+                print(insert_qry)
+                all_rows = []
+
+        insert_qry =  """ INSERT INTO {0} VALUES ({1})""".format(tablename, "),(".join(all_rows))
+        print(insert_qry)
+        
+
+
+    def save_in_table(self):
+        id_table_df, data_table_df = self._to_df()
+        
+        # First create table
+        table_prefix = "_".join(self.params.all_tags())
+        id_table_name = "{0}_idinfo".format(table_prefix)
+        data_table_name = "{0}_datainfo".format(table_prefix)
+
+        self._create_table_and_fill(id_table_name, id_table_df)
+
+
+
+
+
+
+
+
 
 class DownloadBase(object):
     def __init__(self, params):
         self.params = params
         self.master_data = None
+        self.data_collection = DataCollection(self.params)
         self.url = self._make_url()
 
         self.tag_tables_table, self.geo_labels_table, self.geo_data_table = self._load_tables()
-    
+
+
     def _load_tables(self):
         #In future this should be lot more complicated
         return dict(), dict(), dict()
@@ -62,6 +154,7 @@ class DownloadBase(object):
         logging.warning("URL={0}".format(url))
         return url
 
+ 
     def _collect_data(self, url_argument, geo_label):
         """ Fetch data from census-url website at the geo_label level with arguments for url provided in url_argument"""
         url_argument['key'] = self.params.key_chain.get_key('census')
@@ -74,21 +167,21 @@ class DownloadBase(object):
 
         rename_dict = {}
         for col in data_df.columns:
-            col_wo_space = col.replace(" ","_") #don't use spaces in the name, use underscore instead
             if col==geo_label or ("in" in url_argument and col in url_argument['in'].keys()):
-                rename_dict[col] = "{0}_id".format(col_wo_space)
+                rename_dict[col] = "{0}_id".format(col)
             else:
-                rename_dict[col] = "{0}_{1}".format(geo_label, col_wo_space)
+                rename_dict[col] = "{0}_{1}".format(geo_label, col)
+
         if self.params.restrict_rows is not None:
             return data_df.iloc[0:self.params.restrict_rows].rename(columns=rename_dict)
         
         return data_df.rename(columns=rename_dict)
 
+
     def fetch(self):
         """ Fetch the data for all level for the paramters provided in params file."""
         for geo_level, geo_label in enumerate(self.params.geography_order):
             url_argument = dict()
-            #url_argument['for'] = "{0}:*".format(geo_label)
             url_argument['for'] = {geo_label:"*"}
 
             if geo_level==0:
@@ -114,6 +207,7 @@ class DownloadBase(object):
         self.master_data.to_csv(csv_filename, index=False)
         print("Making csv file {0}".format(csv_filename))
     
+
     def _load_master_data(self):
         csv_filename = self.params.csv_filename()
         self.master_data = pd.read_csv(csv_filename)
@@ -124,24 +218,22 @@ class DownloadBase(object):
             if self.master_data is None:
                 return None
         
-        data_collection = DataCollection(self.params)
         for index, row in self.master_data.iterrows():
-            data_collection.add(row)
+            self.data_collection.add(row)
+        
+        #Either insert or save as files
+        #self.data_collection.save_as_file()
+        self.data_collection.save_in_table()
+        
             
-
-
-        
-
-        
-        
-        
-
 
 def test_download():
     import params_base
     params = params_base.Params()
     download_base = DownloadBase(params)
     download_base.fill()
+    pass
+    
 
 
 if __name__=='__main__':

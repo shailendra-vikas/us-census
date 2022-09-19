@@ -39,7 +39,7 @@ class Params(object):
 
 
     def csv_filename(self):
-        csv_filename = "_".join(self.all_tags) +".csv"
+        csv_filename = "_".join(self.all_tags()) +".csv"
         return os.path.join(self.keychain.personal_repository, "us-census", "csv_files", csv_filename)
         
 
