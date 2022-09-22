@@ -21,6 +21,8 @@ class Params(object):
     """ This class surves as template for parameter class which when derived and params value
         overwritten, govern the behaviour of the program
     """
+    short_wordmap = {    'population': 'pop',    'county': 'cnty',       'county subdivision': 'csub'
+                        }
     def __init__(self):
         self.keychain = KeyChain()
         self.data_year = 2019
@@ -37,6 +39,10 @@ class Params(object):
         all_tags = [tag.replace(" ","_") for tag in all_tags]
         return all_tags
 
+    def all_tags_short(self):
+        all_tags = self.surveys + [str(self.data_year),] + self.geography_order
+        all_tags = [self.short_wordmap.get(tag,tag).replace(" ","_") for tag in all_tags]
+        return all_tags
 
     def csv_filename(self):
         csv_filename = "_".join(self.all_tags()) +".csv"

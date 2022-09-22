@@ -3,6 +3,7 @@ import logging
 import numpy as np
 import pandas as pd
 import utility as util
+import sql_connect.mysql_connect as mysql_connect
 
 
 class DataCollection(object):
@@ -88,28 +89,28 @@ class DataCollection(object):
             col_type, col_mysql_type, nullable = self.column_properties[col]
             table_column.append(" `{0}` {1} {2} NULL ".format(col, col_mysql_type, "" if nullable else "NOT" ))
 
-        create_qry = " CREATE TABLE `{0}` ({1})".format(tablename, ",".join(table_column))
-        print(create_qry)
+        mysql = mysql_connect.MySQL()
+        create_qry = " CREATE TABLE IF NOT EXISTS `{0}` ({1})".format(tablename, ",".join(table_column))
+        mysql.execute(create_qry)
+
         all_rows = []
+        insert_qry =  """ INSERT INTO {0} VALUES ({1})""".format(tablename,",".join(['%s']*len(table_df.columns)))
         for index, row in table_df.iterrows():
             row_values = []
             for col in table_df.columns:
                 col_type, col_mysql_type, nullable = self.column_properties[col]
                 if col_type == str:
-                    row_values.append("'{}'".format(col_type(row[col])))
+                    row_values.append("{}".format(col_type(row[col])))
                 elif np.isnan(row[col]):
-                    row_values.append("NULL")
+                    row_values.append(None)
                 else:
                     row_values.append("{}".format(col_type(row[col])))
-            all_rows.append(",".join(row_values))
+            all_rows.append(tuple(row_values))
 
             if index%100 == 1:
-                insert_qry =  """ INSERT INTO {0} VALUES ({1})""".format(tablename, "),(".join(all_rows))
-                print(insert_qry)
+                mysql.insertmany(insert_qry, all_rows)
                 all_rows = []
-
-        insert_qry =  """ INSERT INTO {0} VALUES ({1})""".format(tablename, "),(".join(all_rows))
-        print(insert_qry)
+        mysql.insertmany(insert_qry, all_rows)
         
 
 
@@ -117,18 +118,11 @@ class DataCollection(object):
         id_table_df, data_table_df = self._to_df()
         
         # First create table
-        table_prefix = "_".join(self.params.all_tags())
+        table_prefix = "_".join(self.params.all_tags_short())
         id_table_name = "{0}_idinfo".format(table_prefix)
         data_table_name = "{0}_datainfo".format(table_prefix)
 
         self._create_table_and_fill(id_table_name, id_table_df)
-
-
-
-
-
-
-
 
 
 class DownloadBase(object):
@@ -210,6 +204,7 @@ class DownloadBase(object):
 
     def _load_master_data(self):
         csv_filename = self.params.csv_filename()
+        print(csv_filename)
         self.master_data = pd.read_csv(csv_filename)
 
     def fill(self):
