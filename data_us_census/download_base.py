@@ -7,9 +7,12 @@ import sql_connect.mysql_connect as mysql_connect
 
 
 class DataCollection(object):
+    """ This class is to fill the data in the format of table as it is design.
+        It generates location_id and parent_id for each rows.
+    """
      # Key-> Column : Value -> (type, nullable )
     column_properties = { 'location_id' : (int, 'int(11)', False),              'id' : (int, 'int(11)', False),          'NAME' : (str, 'varchar(200)', False),
-                               'GEO_ID' : (str, 'varchar(20)', False) ,  'parent_id' : (int, 'int(11)', True),    'PRIMGEOFLAG' : (int, 'int(2)', False),
+                               'GEO_ID' : (str, 'varchar(20)', False) ,  'parent_id' : (int, 'int(11)', True),    'PRIMGEOFLAG' : (int, 'int(2)', True),
                                   'POP' : (int, 'int(11)', False),         'DENSITY' : (float, 'float', True)
         }  
     def __init__(self, params):
@@ -37,6 +40,8 @@ class DataCollection(object):
 
 
     def add(self, row):
+        """  Adding a row to the dataset
+        """
         for geo_level, geo_label in enumerate(self.params.geography_order):
             id_primary = (*row[["{0}_{1}".format(geo_label,_col) for _col in self.id_related_columns]],)
             if all(map(np.isnan, id_primary)):
@@ -91,7 +96,9 @@ class DataCollection(object):
 
         mysql = mysql_connect.MySQL()
         create_qry = " CREATE TABLE IF NOT EXISTS `{0}` ({1})".format(tablename, ",".join(table_column))
+        #create_qry = " DROP TABLE IF EXISTS `{0}`; CREATE TABLE `{1}` ({2})".format(tablename, tablename, ",".join(table_column))
         mysql.execute(create_qry)
+        print(create_qry)
 
         all_rows = []
         insert_qry =  """ INSERT INTO {0} VALUES ({1})""".format(tablename,",".join(['%s']*len(table_df.columns)))
@@ -100,11 +107,13 @@ class DataCollection(object):
             for col in table_df.columns:
                 col_type, col_mysql_type, nullable = self.column_properties[col]
                 if col_type == str:
-                    row_values.append("{}".format(col_type(row[col])))
+                    #row_values.append("{}".format(col_type(row[col])))
+                    row_values.append(col_type(row[col]))
                 elif np.isnan(row[col]):
                     row_values.append(None)
                 else:
-                    row_values.append("{}".format(col_type(row[col])))
+                    #row_values.append("{}".format(col_type(row[col])))
+                    row_values.append(col_type(row[col]))
             all_rows.append(tuple(row_values))
 
             if index%100 == 1:
@@ -123,6 +132,7 @@ class DataCollection(object):
         data_table_name = "{0}_datainfo".format(table_prefix)
 
         self._create_table_and_fill(id_table_name, id_table_df)
+        self._create_table_and_fill(data_table_name, data_table_df)
 
 
 class DownloadBase(object):
@@ -141,7 +151,7 @@ class DownloadBase(object):
 
 
     def _make_url(self):
-        """ Format the base part of the Url"""
+        """ Format the base part of the Url."""
         survey_str = "/".join(self.params.surveys)
         column_str = "NAME," + ",".join(self.params.data_columns)
         url = "https://api.census.gov/data/{0}/{1}?get={2}".format(self.params.data_year, survey_str, column_str)

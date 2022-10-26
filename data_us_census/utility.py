@@ -3,6 +3,8 @@ import pandas as pd
 
 
 def url_to_df(url, arguments):
+    """ Fetch data from url with arguments as argument in url. The data is returned in DataFrame format.
+    """
     import requests
     argument_str = [url,]
     for argkey, argvalue in arguments.items():
