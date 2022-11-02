@@ -44,6 +44,9 @@ class Params(object):
         all_tags = [self.short_wordmap.get(tag,tag).replace(" ","_") for tag in all_tags]
         return all_tags
 
+    def out_dir(self):
+        return self.keychain.personal_repository
+
     def csv_filename(self):
         csv_filename = "_".join(self.all_tags()) +".csv"
         return os.path.join(self.keychain.personal_repository, "us-census", "csv_files", csv_filename)

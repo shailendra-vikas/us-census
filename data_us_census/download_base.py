@@ -3,7 +3,7 @@ import logging
 import numpy as np
 import pandas as pd
 import logging
-import download_utility as dutil
+from data_us_census import download_utility as dutil
 
 
 class DataCollection(object):
@@ -84,8 +84,12 @@ class DataCollection(object):
 
     def save_as_file(self):
         id_table_df, data_table_df = self._to_df()
-        id_table_df.to_csv('id_table.csv', index=False)
-        data_table_df.to_csv('data_table.csv', index=False)
+        id_table_filename =  os.path.join(self.params.out_dir(), 'id_table.csv')
+        logging.info('Saving file {}'.format(id_table_filename))
+        id_table_df.to_csv(id_table_filename, index=False)
+        data_table_filename =  os.path.join(self.params.out_dir(), 'data_table.csv')
+        logging.info('Saving file{}'.format(id_table_filename))
+        data_table_df.to_csv(data_table_filename, index=False)
 
 
     def _create_table_and_fill(self, tablename, table_df):
@@ -123,7 +127,6 @@ class DataCollection(object):
         mysql.insertmany(insert_qry, all_rows)
         
 
-
     def save_in_table(self):
         id_table_df, data_table_df = self._to_df()
         
@@ -156,13 +159,13 @@ class DownloadBase(object):
         survey_str = "/".join(self.params.surveys)
         column_str = "NAME," + ",".join(self.params.data_columns)
         url = "https://api.census.gov/data/{0}/{1}?get={2}".format(self.params.data_year, survey_str, column_str)
-        logging.warning("URL={0}".format(url))
+        logging.info("URL={0}".format(url))
         return url
 
  
     def _collect_data(self, url_argument, geo_label):
         """ Fetch data from census-url website at the geo_label level with arguments for url provided in url_argument"""
-        url_argument['key'] = self.params.key_chain.get_key('census')
+        url_argument['key'] = self.params.keychain.get_key('census')
         if self.params.sleep is not None:
             import time
             time.sleep(self.params.sleep)
@@ -218,11 +221,12 @@ class DownloadBase(object):
         logging.info("Loading {}".format(csv_filename))
         self.master_data = pd.read_csv(csv_filename)
 
-    def fill(self, save_csv=False, save_table=True ):
+
+    def fill(self, save_csv=False, save_table=True):
         if self.master_data is None:
             self._load_master_data()
             if self.master_data is None:
-                return None
+                return False
         
         for index, row in self.master_data.iterrows():
             self.data_collection.add(row)
@@ -232,18 +236,6 @@ class DownloadBase(object):
 
         if save_table:
             self.data_collection.save_in_table()
+
+        return True
         
-            
-
-def test_download():
-    import params_base
-    params = params_base.Params()
-    download_base = DownloadBase(params)
-    download_base.fill()
-    pass
-    
-
-
-if __name__=='__main__':
-    test_download()
-
