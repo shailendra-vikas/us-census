@@ -2,8 +2,8 @@ import os
 import logging
 import numpy as np
 import pandas as pd
-import utility as util
-import sql_connect.mysql_connect as mysql_connect
+import logging
+import download_utility as dutil
 
 
 class DataCollection(object):
@@ -89,6 +89,7 @@ class DataCollection(object):
 
 
     def _create_table_and_fill(self, tablename, table_df):
+        import sql_connect.mysql_connect as mysql_connect
         table_column = []
         for col in table_df.columns:
             col_type, col_mysql_type, nullable = self.column_properties[col]
@@ -98,7 +99,7 @@ class DataCollection(object):
         create_qry = " CREATE TABLE IF NOT EXISTS `{0}` ({1})".format(tablename, ",".join(table_column))
         #create_qry = " DROP TABLE IF EXISTS `{0}`; CREATE TABLE `{1}` ({2})".format(tablename, tablename, ",".join(table_column))
         mysql.execute(create_qry)
-        print(create_qry)
+        logging.debug(create_qry)
 
         all_rows = []
         insert_qry =  """ INSERT INTO {0} VALUES ({1})""".format(tablename,",".join(['%s']*len(table_df.columns)))
@@ -165,7 +166,7 @@ class DownloadBase(object):
         if self.params.sleep is not None:
             import time
             time.sleep(self.params.sleep)
-        data_df = util.url_to_df(self.url, url_argument)
+        data_df = dutil.url_to_df(self.url, url_argument)
         if data_df is None:
             return None
 
@@ -209,15 +210,15 @@ class DownloadBase(object):
         #Now accumulated data. Make tables to insert data
         csv_filename = self.params.csv_filename()
         self.master_data.to_csv(csv_filename, index=False)
-        print("Making csv file {0}".format(csv_filename))
+        logging.info("Making csv file {}".format(csv_filename))
     
 
     def _load_master_data(self):
         csv_filename = self.params.csv_filename()
-        print(csv_filename)
+        logging.info("Loading {}".format(csv_filename))
         self.master_data = pd.read_csv(csv_filename)
 
-    def fill(self):
+    def fill(self, save_csv=False, save_table=True ):
         if self.master_data is None:
             self._load_master_data()
             if self.master_data is None:
@@ -226,9 +227,11 @@ class DownloadBase(object):
         for index, row in self.master_data.iterrows():
             self.data_collection.add(row)
         
-        #Either insert or save as files
-        #self.data_collection.save_as_file()
-        self.data_collection.save_in_table()
+        if save_csv:
+            self.data_collection.save_as_file()
+
+        if save_table:
+            self.data_collection.save_in_table()
         
             
 

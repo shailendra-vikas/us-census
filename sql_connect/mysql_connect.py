@@ -6,10 +6,10 @@ from mysql.connector.errors import DatabaseError
 
 class MySQL(object):
     db_config = {
-            'user': 'root',
-        'password': 'welcome123',
-            'host': '34.133.245.191',
-        'database': 'us_census'
+            'user': 'username',
+        'password': 'password',
+            'host': 'host ip address',
+        'database': 'name of database'
          }
     def __init__(self):
 
@@ -40,10 +40,8 @@ class MySQL(object):
         cursor.close()
 
     def insertmany(self, qry, val):
-        print(qry)
         cursor = self.cnxn.cursor()
         cursor.executemany(qry, val)
-        print(val)
         self.cnxn.commit()
         cursor.close()
 
